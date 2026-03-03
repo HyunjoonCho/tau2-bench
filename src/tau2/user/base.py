@@ -5,6 +5,7 @@ from typing import Optional
 from loguru import logger
 from pydantic import BaseModel
 
+from tau2.config import DEFAULT_LLM_BACKEND_USER
 from tau2.data_model.message import (
     APICompatibleMessage,
     AssistantMessage,
@@ -101,9 +102,11 @@ class BaseUser(ABC):
         self,
         instructions: Optional[str] = None,
         llm: Optional[str] = None,
+        llm_backend: Optional[str] = DEFAULT_LLM_BACKEND_USER,
         llm_args: Optional[dict] = None,
     ):
         self.llm = llm
+        self.llm_backend = llm_backend
         self.llm_args = deepcopy(llm_args) if llm_args is not None else {}
         self.instructions = instructions
 

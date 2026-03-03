@@ -11,6 +11,8 @@ from tau2.config import (
     DEFAULT_LLM_AGENT,
     DEFAULT_LLM_ARGS_AGENT,
     DEFAULT_LLM_ARGS_USER,
+    DEFAULT_LLM_BACKEND_AGENT,
+    DEFAULT_LLM_BACKEND_USER,
     DEFAULT_LLM_USER,
     DEFAULT_LOG_LEVEL,
     DEFAULT_MAX_CONCURRENCY,
@@ -19,6 +21,7 @@ from tau2.config import (
     DEFAULT_NUM_TRIALS,
     DEFAULT_SAVE_TO,
     DEFAULT_SEED,
+    SUPPORTED_LLM_BACKENDS,
 )
 from tau2.data_model.message import Message
 from tau2.data_model.tasks import Action, EnvAssertion, RewardType, Task
@@ -83,6 +86,13 @@ class RunConfig(BaseModel):
             default=DEFAULT_LLM_AGENT,
         ),
     ]
+    llm_backend_agent: Annotated[
+        str,
+        Field(
+            description="The backend to use for the agent LLM",
+            default=DEFAULT_LLM_BACKEND_AGENT,
+        ),
+    ]
     llm_args_agent: Annotated[
         dict,
         Field(
@@ -102,6 +112,13 @@ class RunConfig(BaseModel):
         Field(
             description="The model to use for the user",
             default=DEFAULT_LLM_USER,
+        ),
+    ]
+    llm_backend_user: Annotated[
+        str,
+        Field(
+            description="The backend to use for the user LLM",
+            default=DEFAULT_LLM_BACKEND_USER,
         ),
     ]
     llm_args_user: Annotated[
@@ -172,7 +189,16 @@ class RunConfig(BaseModel):
         """
         Validate the run config
         """
-        pass
+        if self.llm_backend_agent not in SUPPORTED_LLM_BACKENDS:
+            raise ValueError(
+                f"Invalid agent backend: {self.llm_backend_agent}. "
+                f"Supported backends: {SUPPORTED_LLM_BACKENDS}"
+            )
+        if self.llm_backend_user not in SUPPORTED_LLM_BACKENDS:
+            raise ValueError(
+                f"Invalid user backend: {self.llm_backend_user}. "
+                f"Supported backends: {SUPPORTED_LLM_BACKENDS}"
+            )
 
 
 class NLAssertionCheck(BaseModel):
@@ -279,6 +305,10 @@ class AgentInfo(BaseModel):
 
     implementation: str = Field(description="The type of agent.")
     llm: Optional[str] = Field(description="The LLM used by the agent.", default=None)
+    llm_backend: Optional[str] = Field(
+        description="The backend used by the agent LLM.",
+        default=None,
+    )
     llm_args: Optional[dict] = Field(
         description="The arguments to pass to the LLM for the agent.", default=None
     )
@@ -291,6 +321,10 @@ class UserInfo(BaseModel):
 
     implementation: str = Field(description="The type of user.")
     llm: Optional[str] = Field(description="The LLM used by the user.", default=None)
+    llm_backend: Optional[str] = Field(
+        description="The backend used by the user LLM.",
+        default=None,
+    )
     llm_args: Optional[dict] = Field(
         description="The arguments to pass to the LLM for the user.", default=None
     )

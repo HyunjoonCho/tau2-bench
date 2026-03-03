@@ -1,4 +1,5 @@
 import json
+import inspect
 import multiprocessing
 import random
 from concurrent.futures import ThreadPoolExecutor
@@ -7,6 +8,7 @@ from typing import Optional
 
 from loguru import logger
 
+from tau2.config import DEFAULT_LLM_BACKEND_AGENT, DEFAULT_LLM_BACKEND_USER
 from tau2.agent.llm_agent import LLMAgent, LLMGTAgent, LLMSoloAgent
 from tau2.data_model.simulation import (
     AgentInfo,
@@ -154,8 +156,10 @@ def run_domain(config: RunConfig) -> Results:
         agent=config.agent,
         user=config.user,
         llm_agent=config.llm_agent,
+        llm_backend_agent=config.llm_backend_agent,
         llm_args_agent=config.llm_args_agent,
         llm_user=config.llm_user,
+        llm_backend_user=config.llm_backend_user,
         llm_args_user=config.llm_args_user,
         num_trials=num_trials,
         max_steps=config.max_steps,
@@ -180,8 +184,10 @@ def run_tasks(
     agent: str,
     user: str,
     llm_agent: Optional[str] = None,
+    llm_backend_agent: Optional[str] = DEFAULT_LLM_BACKEND_AGENT,
     llm_args_agent: Optional[dict] = None,
     llm_user: Optional[str] = None,
+    llm_backend_user: Optional[str] = DEFAULT_LLM_BACKEND_USER,
     llm_args_user: Optional[dict] = None,
     num_trials: int = 1,
     max_steps: int = 100,
@@ -204,8 +210,10 @@ def run_tasks(
         agent (str): The agent to run the simulation on.
         user (str): The user to run the simulation on.
         llm_agent (str): The model to use for the agent.
+        llm_backend_agent (str): The backend to use for the agent LLM.
         llm_args_agent (dict): The arguments to pass to the LLM for the agent.
         llm_user (str): The model to use for the user.
+        llm_backend_user (str): The backend to use for the user LLM.
         llm_args_user (dict): The arguments to pass to the LLM for the user.
         max_steps (int): The maximum number of steps to run the simulation.
         max_errors (int): The maximum number of errors to allow in the simulation.
@@ -231,6 +239,8 @@ def run_tasks(
         raise ValueError("Max steps must be greater than 0")
     if max_errors <= 0:
         raise ValueError("Max errors must be greater than 0")
+    llm_args_agent = llm_args_agent or {}
+    llm_args_user = llm_args_user or {}
 
     random.seed(seed)
 
@@ -248,8 +258,10 @@ def run_tasks(
         agent=agent,
         user=user,
         llm_agent=llm_agent,
+        llm_backend_agent=llm_backend_agent,
         llm_args_agent=llm_args_agent,
         llm_user=llm_user,
+        llm_backend_user=llm_backend_user,
         llm_args_user=llm_args_user,
         num_trials=num_trials,
         max_steps=max_steps,
@@ -360,8 +372,10 @@ def run_tasks(
                 agent=agent,
                 user=user,
                 llm_agent=llm_agent,
+                llm_backend_agent=llm_backend_agent,
                 llm_args_agent=llm_args_agent,
                 llm_user=llm_user,
+                llm_backend_user=llm_backend_user,
                 llm_args_user=llm_args_user,
                 max_steps=max_steps,
                 max_errors=max_errors,
@@ -407,8 +421,10 @@ def run_task(
     agent: str,
     user: str,
     llm_agent: Optional[str] = None,
+    llm_backend_agent: Optional[str] = DEFAULT_LLM_BACKEND_AGENT,
     llm_args_agent: Optional[dict] = None,
     llm_user: Optional[str] = None,
+    llm_backend_user: Optional[str] = DEFAULT_LLM_BACKEND_USER,
     llm_args_user: Optional[dict] = None,
     max_steps: int = 100,
     max_errors: int = 10,
@@ -426,8 +442,10 @@ def run_task(
          agent (str): The agent to run the simulation on.
          user (str): The user to run the simulation on.
          llm_agent (str): The model to use for the agent.
+         llm_backend_agent (str): The backend to use for the agent LLM.
          llm_args_agent (dict): The arguments to pass to the LLM for the agent.
          llm_user (str): The model to use for the user.
+         llm_backend_user (str): The backend to use for the user LLM.
          llm_args_user (dict): The arguments to pass to the LLM for the user.
          max_steps (int): The maximum number of steps to run the simulation.
          max_errors (int): The maximum number of errors to allow in the simulation.
@@ -456,6 +474,7 @@ def run_task(
             tools=environment.get_tools(),
             domain_policy=environment.get_policy(),
             llm=llm_agent,
+            llm_backend=llm_backend_agent,
             llm_args=llm_args_agent,
         )
     elif issubclass(AgentConstructor, LLMGTAgent):
@@ -463,6 +482,7 @@ def run_task(
             tools=environment.get_tools(),
             domain_policy=environment.get_policy(),
             llm=llm_agent,
+            llm_backend=llm_backend_agent,
             llm_args=llm_args_agent,
             task=task,
         )
@@ -474,6 +494,7 @@ def run_task(
             tools=environment.get_tools() + user_tools,
             domain_policy=environment.get_policy(),
             llm=llm_agent,
+            llm_backend=llm_backend_agent,
             llm_args=llm_args_agent,
             task=task,
         )
@@ -497,12 +518,15 @@ def run_task(
             agent, LLMSoloAgent
         ), "Dummy user can only be used with solo agent"
 
-    user = UserConstructor(
-        tools=user_tools,
-        instructions=str(task.user_scenario),
-        llm=llm_user,
-        llm_args=llm_args_user,
-    )
+    user_kwargs = {
+        "tools": user_tools,
+        "instructions": str(task.user_scenario),
+        "llm": llm_user,
+        "llm_args": llm_args_user,
+    }
+    if "llm_backend" in inspect.signature(UserConstructor.__init__).parameters:
+        user_kwargs["llm_backend"] = llm_backend_user
+    user = UserConstructor(**user_kwargs)
 
     orchestrator = Orchestrator(
         domain=domain,
@@ -539,8 +563,10 @@ def get_info(
     agent: str,
     user: str,
     llm_agent: Optional[str] = None,
+    llm_backend_agent: Optional[str] = DEFAULT_LLM_BACKEND_AGENT,
     llm_args_agent: Optional[dict] = None,
     llm_user: Optional[str] = None,
+    llm_backend_user: Optional[str] = DEFAULT_LLM_BACKEND_USER,
     llm_args_user: Optional[dict] = None,
     num_trials: int = 1,
     max_steps: int = 100,
@@ -550,12 +576,14 @@ def get_info(
     user_info = UserInfo(
         implementation=user,
         llm=llm_user,
+        llm_backend=llm_backend_user,
         llm_args=llm_args_user,
         global_simulation_guidelines=get_global_user_sim_guidelines(),
     )
     agent_info = AgentInfo(
         implementation=agent,
         llm=llm_agent,
+        llm_backend=llm_backend_agent,
         llm_args=llm_args_agent,
     )
     environment_info = get_environment_info(

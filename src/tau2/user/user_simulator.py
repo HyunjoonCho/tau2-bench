@@ -71,9 +71,15 @@ class UserSimulator(BaseUser):
         tools: Optional[list[Tool]] = None,
         instructions: Optional[UserInstructions] = None,
         llm: Optional[str] = None,
+        llm_backend: Optional[str] = None,
         llm_args: Optional[dict] = None,
     ):
-        super().__init__(instructions=instructions, llm=llm, llm_args=llm_args)
+        super().__init__(
+            instructions=instructions,
+            llm=llm,
+            llm_backend=llm_backend,
+            llm_args=llm_args,
+        )
         self.tools = tools
 
     @property
@@ -159,6 +165,7 @@ class UserSimulator(BaseUser):
             model=self.llm,
             messages=messages,
             tools=self.tools,
+            llm_backend=self.llm_backend,
             **self.llm_args,
         )
 

@@ -4,6 +4,8 @@ import json
 from tau2.config import (
     DEFAULT_AGENT_IMPLEMENTATION,
     DEFAULT_LLM_AGENT,
+    DEFAULT_LLM_BACKEND_AGENT,
+    DEFAULT_LLM_BACKEND_USER,
     DEFAULT_LLM_TEMPERATURE_AGENT,
     DEFAULT_LLM_TEMPERATURE_USER,
     DEFAULT_LLM_USER,
@@ -13,6 +15,7 @@ from tau2.config import (
     DEFAULT_MAX_STEPS,
     DEFAULT_NUM_TRIALS,
     DEFAULT_SEED,
+    SUPPORTED_LLM_BACKENDS,
     DEFAULT_USER_IMPLEMENTATION,
 )
 from tau2.data_model.simulation import RunConfig
@@ -50,6 +53,13 @@ def add_run_args(parser):
         help=f"The LLM to use for the agent. Default is {DEFAULT_LLM_AGENT}.",
     )
     parser.add_argument(
+        "--agent-llm-backend",
+        type=str,
+        default=DEFAULT_LLM_BACKEND_AGENT,
+        choices=SUPPORTED_LLM_BACKENDS,
+        help=f"The backend to use for the agent LLM. Default is {DEFAULT_LLM_BACKEND_AGENT}.",
+    )
+    parser.add_argument(
         "--agent-llm-args",
         type=json.loads,
         default={"temperature": DEFAULT_LLM_TEMPERATURE_AGENT},
@@ -67,6 +77,13 @@ def add_run_args(parser):
         type=str,
         default=DEFAULT_LLM_USER,
         help=f"The LLM to use for the user. Default is {DEFAULT_LLM_USER}.",
+    )
+    parser.add_argument(
+        "--user-llm-backend",
+        type=str,
+        default=DEFAULT_LLM_BACKEND_USER,
+        choices=SUPPORTED_LLM_BACKENDS,
+        help=f"The backend to use for the user LLM. Default is {DEFAULT_LLM_BACKEND_USER}.",
     )
     parser.add_argument(
         "--user-llm-args",
@@ -160,9 +177,11 @@ def main():
                 num_tasks=args.num_tasks,
                 agent=args.agent,
                 llm_agent=args.agent_llm,
+                llm_backend_agent=args.agent_llm_backend,
                 llm_args_agent=args.agent_llm_args,
                 user=args.user,
                 llm_user=args.user_llm,
+                llm_backend_user=args.user_llm_backend,
                 llm_args_user=args.user_llm_args,
                 num_trials=args.num_trials,
                 max_steps=args.max_steps,

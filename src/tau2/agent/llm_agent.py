@@ -4,6 +4,7 @@ from typing import List, Optional
 from loguru import logger
 from pydantic import BaseModel
 
+from tau2.config import DEFAULT_LLM_BACKEND_AGENT
 from tau2.agent.base import (
     LocalAgent,
     ValidAgentInputMessage,
@@ -58,6 +59,7 @@ class LLMAgent(LocalAgent[LLMAgentState]):
         tools: List[Tool],
         domain_policy: str,
         llm: Optional[str] = None,
+        llm_backend: Optional[str] = DEFAULT_LLM_BACKEND_AGENT,
         llm_args: Optional[dict] = None,
     ):
         """
@@ -65,6 +67,7 @@ class LLMAgent(LocalAgent[LLMAgentState]):
         """
         super().__init__(tools=tools, domain_policy=domain_policy)
         self.llm = llm
+        self.llm_backend = llm_backend
         self.llm_args = deepcopy(llm_args) if llm_args is not None else {}
 
     @property
@@ -109,6 +112,7 @@ class LLMAgent(LocalAgent[LLMAgentState]):
             model=self.llm,
             tools=self.tools,
             messages=messages,
+            llm_backend=self.llm_backend,
             **self.llm_args,
         )
         state.messages.append(assistant_message)
@@ -164,6 +168,7 @@ class LLMGTAgent(LocalAgent[LLMAgentState]):
         domain_policy: str,
         task: Task,
         llm: Optional[str] = None,
+        llm_backend: Optional[str] = DEFAULT_LLM_BACKEND_AGENT,
         llm_args: Optional[dict] = None,
         provide_function_args: bool = True,
     ):
@@ -177,6 +182,7 @@ class LLMGTAgent(LocalAgent[LLMAgentState]):
         )
         self.task = task
         self.llm = llm
+        self.llm_backend = llm_backend
         self.llm_args = deepcopy(llm_args) if llm_args is not None else {}
         self.provide_function_args = provide_function_args
 
@@ -237,6 +243,7 @@ class LLMGTAgent(LocalAgent[LLMAgentState]):
             model=self.llm,
             tools=self.tools,
             messages=messages,
+            llm_backend=self.llm_backend,
             **self.llm_args,
         )
         state.messages.append(assistant_message)
@@ -326,6 +333,7 @@ class LLMSoloAgent(LocalAgent[LLMAgentState]):
         domain_policy: str,
         task: Task,
         llm: Optional[str] = None,
+        llm_backend: Optional[str] = DEFAULT_LLM_BACKEND_AGENT,
         llm_args: Optional[dict] = None,
     ):
         """
@@ -337,6 +345,7 @@ class LLMSoloAgent(LocalAgent[LLMAgentState]):
         )
         self.task = task
         self.llm = llm
+        self.llm_backend = llm_backend
         self.llm_args = llm_args if llm_args is not None else {}
         self.add_stop_tool()
         self.validate_tools()
@@ -458,6 +467,7 @@ class LLMSoloAgent(LocalAgent[LLMAgentState]):
             tools=self.tools,
             messages=messages,
             tool_choice="required",
+            llm_backend=self.llm_backend,
             **self.llm_args,
         )
         if not assistant_message.is_tool_call():

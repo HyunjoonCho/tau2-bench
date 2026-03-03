@@ -117,6 +117,11 @@ We use [LiteLLM](https://github.com/BerriAI/litellm) to manage LLM APIs, so you 
 
 To provide your API keys, copy `.env.example` as `.env` and edit it to include your API keys.
 
+By default, both agent and user simulator use the `litellm` backend. You can override each side independently with:
+- `--agent-llm-backend litellm|transformers|guidance`
+- `--user-llm-backend litellm|transformers|guidance`
+When using local backends, install the required libraries first (`transformers` for `transformers`, and both `transformers` + `guidance` for `guidance`).
+
 ### Run agent evaluation
 
 To run a test evaluation on only 5 tasks with 1 trial per task, run:
@@ -128,6 +133,19 @@ tau2 run \
 --user-llm gpt-4.1 \
 --num-trials 1 \
 --num-tasks 5
+```
+
+Example mixed backend run (local transformers agent + LiteLLM user simulator):
+```bash
+tau2 run \
+--domain airline \
+--agent-llm-backend transformers \
+--agent-llm meta-llama/Meta-Llama-3.1-8B-Instruct \
+--agent-llm-args '{"temperature":0.0,"max_new_tokens":512,"device_map":"auto","dtype":"auto"}' \
+--user-llm-backend litellm \
+--user-llm gpt-4.1 \
+--num-trials 1 \
+--num-tasks 1
 ```
 
 Results will be saved in `data/tau2/simulations/`.

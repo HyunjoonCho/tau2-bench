@@ -13,6 +13,7 @@ from tau2.data_model.simulation import RunConfig
 from tau2.data_model.tasks import EnvAssertion, RewardType, Task, make_task
 from tau2.run import (
     EvaluationType,
+    get_info,
     get_options,
     get_tasks,
     load_tasks,
@@ -67,6 +68,22 @@ def test_get_options():
     """Test that we can get available options from the registry"""
     options = get_options()
     assert options.domains is not None
+
+
+def test_get_info_includes_llm_backends():
+    info = get_info(
+        domain="mock",
+        agent="llm_agent",
+        user="user_simulator",
+        llm_agent="gpt-4.1",
+        llm_backend_agent="transformers",
+        llm_args_agent={"temperature": 0.0},
+        llm_user="gpt-4.1",
+        llm_backend_user="litellm",
+        llm_args_user={"temperature": 0.0},
+    )
+    assert info.agent_info.llm_backend == "transformers"
+    assert info.user_info.llm_backend == "litellm"
 
 
 def test_load_tasks():

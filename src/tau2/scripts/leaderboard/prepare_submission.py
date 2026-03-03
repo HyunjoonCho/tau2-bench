@@ -83,8 +83,10 @@ def validate_submission_traj_set(
     for results in all_results:
         res_agent_user_info = {
             "llm_agent": results.info.agent_info.llm,
+            "llm_backend_agent": results.info.agent_info.llm_backend,
             "llm_args_agent": results.info.agent_info.llm_args,
             "llm_user": results.info.user_info.llm,
+            "llm_backend_user": results.info.user_info.llm_backend,
             "llm_args_user": results.info.user_info.llm_args,
         }
         if agent_user_info is None:
