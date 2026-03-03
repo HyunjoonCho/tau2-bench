@@ -4,6 +4,7 @@ import uuid
 from typing import Any, Optional
 
 from loguru import logger
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from tau2.data_model.message import (
     AssistantMessage,
@@ -21,6 +22,7 @@ class TransformersBackend(LLMBackend):
     name = "transformers"
 
     _cache_lock = threading.Lock()
+    _inference_lock = threading.Lock()
     _model_cache: dict[str, tuple[Any, Any]] = {}
 
     def generate(
@@ -34,13 +36,14 @@ class TransformersBackend(LLMBackend):
         if tools and tool_choice is None:
             tool_choice = "auto"
 
-        text, usage, raw_data = self._generate_text(
-            model=model,
-            messages=messages,
-            tools=tools,
-            tool_choice=tool_choice,
-            **kwargs,
-        )
+        with self._inference_lock:
+            text, usage, raw_data = self._generate_text(
+                model=model,
+                messages=messages,
+                tools=tools,
+                tool_choice=tool_choice,
+                **kwargs,
+            )
         content, parsed_tool_calls = self._parse_assistant_output(
             text=text,
             tool_choice=tool_choice,
@@ -62,7 +65,6 @@ class TransformersBackend(LLMBackend):
         tool_choice: Optional[str],
         **kwargs: Any,
     ) -> tuple[str, Optional[dict], dict]:
-        AutoModelForCausalLM, AutoTokenizer = self._import_transformers()
         tokenizer, hf_model = self._get_or_create_model_pair(
             model=model,
             kwargs=kwargs,
@@ -72,18 +74,26 @@ class TransformersBackend(LLMBackend):
 
         chat_messages = self._to_chat_messages(messages)
         tool_schemas = [tool.openai_schema for tool in tools] if tools else None
-        input_ids = self._build_input_ids(
+        input_ids, attention_mask = self._build_model_inputs(
             tokenizer=tokenizer,
             chat_messages=chat_messages,
             tool_schemas=tool_schemas,
             tool_choice=tool_choice,
         )
-        input_ids = self._move_to_model_device(input_ids, hf_model)
+        if attention_mask is None and hasattr(input_ids, "new_ones"):
+            attention_mask = input_ids.new_ones(input_ids.shape)
+        input_ids, attention_mask = self._move_to_model_device(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            hf_model=hf_model,
+        )
 
         generation_kwargs = self._build_generation_kwargs(
             tokenizer=tokenizer,
             kwargs=kwargs,
         )
+        if attention_mask is not None:
+            generation_kwargs["attention_mask"] = attention_mask
         output_ids = hf_model.generate(input_ids=input_ids, **generation_kwargs)
         prompt_tokens = self._sequence_length(input_ids)
         completion_ids = output_ids[:, prompt_tokens:]
@@ -101,16 +111,6 @@ class TransformersBackend(LLMBackend):
             "tool_choice": tool_choice,
         }
         return text, usage, raw_data
-
-    @classmethod
-    def _import_transformers(cls):
-        try:
-            from transformers import AutoModelForCausalLM, AutoTokenizer
-        except Exception as e:
-            raise ImportError(
-                "Transformers backend requires the `transformers` package."
-            ) from e
-        return AutoModelForCausalLM, AutoTokenizer
 
     def _get_or_create_model_pair(
         self,
@@ -157,13 +157,13 @@ class TransformersBackend(LLMBackend):
         return model_load_kwargs
 
     @classmethod
-    def _build_input_ids(
+    def _build_model_inputs(
         cls,
         tokenizer: Any,
         chat_messages: list[dict[str, Any]],
         tool_schemas: Optional[list[dict[str, Any]]],
         tool_choice: Optional[str],
-    ) -> Any:
+    ) -> tuple[Any, Optional[Any]]:
         if hasattr(tokenizer, "apply_chat_template"):
             rendered = None
             try:
@@ -186,27 +186,35 @@ class TransformersBackend(LLMBackend):
 
             if rendered is not None:
                 if hasattr(rendered, "input_ids"):
-                    return rendered.input_ids
+                    return rendered.input_ids, getattr(rendered, "attention_mask", None)
                 if isinstance(rendered, dict) and "input_ids" in rendered:
-                    return rendered["input_ids"]
-                return rendered
+                    return rendered["input_ids"], rendered.get("attention_mask")
+                return rendered, None
 
         prompt = cls._build_fallback_prompt(chat_messages, tool_schemas, tool_choice)
         encoded = tokenizer(prompt, return_tensors="pt")
         if hasattr(encoded, "input_ids"):
-            return encoded.input_ids
+            return encoded.input_ids, getattr(encoded, "attention_mask", None)
         if isinstance(encoded, dict) and "input_ids" in encoded:
-            return encoded["input_ids"]
+            return encoded["input_ids"], encoded.get("attention_mask")
         raise ValueError("Tokenizer did not return input_ids")
 
-    @staticmethod
-    def _move_to_model_device(input_ids: Any, hf_model: Any) -> Any:
+    @classmethod
+    def _move_to_model_device(
+        cls, input_ids: Any, attention_mask: Optional[Any], hf_model: Any
+    ) -> tuple[Any, Optional[Any]]:
         if not hasattr(input_ids, "to"):
-            return input_ids
+            return input_ids, attention_mask
         device = getattr(hf_model, "device", None)
         if device is None:
-            return input_ids
-        return input_ids.to(device)
+            return input_ids, attention_mask
+        moved_input_ids = input_ids.to(device)
+        moved_attention_mask = (
+            attention_mask.to(device)
+            if attention_mask is not None and hasattr(attention_mask, "to")
+            else attention_mask
+        )
+        return moved_input_ids, moved_attention_mask
 
     @staticmethod
     def _build_generation_kwargs(tokenizer: Any, kwargs: dict[str, Any]) -> dict[str, Any]:
@@ -215,9 +223,10 @@ class TransformersBackend(LLMBackend):
         generation_kwargs = {
             "max_new_tokens": kwargs.get("max_new_tokens", 512),
             "do_sample": do_sample,
-            "temperature": temperature,
-            "top_p": kwargs.get("top_p", 1.0),
         }
+        if do_sample:
+            generation_kwargs["temperature"] = temperature
+            generation_kwargs["top_p"] = kwargs.get("top_p", 1.0)
         pad_token_id = getattr(tokenizer, "pad_token_id", None)
         eos_token_id = getattr(tokenizer, "eos_token_id", None)
         if pad_token_id is not None:
@@ -394,4 +403,3 @@ class TransformersBackend(LLMBackend):
                 )
             )
         return tool_calls
-

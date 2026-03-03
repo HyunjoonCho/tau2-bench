@@ -91,3 +91,13 @@ def test_transformers_backend_required_tool_call_enforced(
             tools=[tool],
             tool_choice="required",
         )
+
+
+def test_generation_kwargs_skip_temperature_when_not_sampling():
+    kwargs = TransformersBackend._build_generation_kwargs(
+        tokenizer=type("Tokenizer", (), {"pad_token_id": 0, "eos_token_id": 2})(),
+        kwargs={"temperature": 0.0},
+    )
+    assert kwargs["do_sample"] is False
+    assert "temperature" not in kwargs
+    assert "top_p" not in kwargs

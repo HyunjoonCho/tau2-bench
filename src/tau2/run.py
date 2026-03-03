@@ -241,6 +241,21 @@ def run_tasks(
         raise ValueError("Max errors must be greater than 0")
     llm_args_agent = llm_args_agent or {}
     llm_args_user = llm_args_user or {}
+    local_backends = {"transformers", "guidance"}
+    uses_local_backend = (
+        llm_backend_agent in local_backends or llm_backend_user in local_backends
+    )
+    if max_concurrency > 1 and uses_local_backend:
+        logger.warning(
+            "Local backends are not safe to run with concurrent threaded simulations. "
+            "Overriding max_concurrency to 1 for this run."
+        )
+        max_concurrency = 1
+    if uses_local_backend:
+        logger.warning(
+            "Running local backend simulations serially in the main thread to avoid "
+            "thread-safety issues."
+        )
 
     random.seed(seed)
 
@@ -405,9 +420,15 @@ def run_tasks(
             progress_str = f"{i}/{len(tasks)} (trial {trial + 1}/{num_trials})"
             args.append((task, trial, seeds[trial], progress_str))
 
-    with ThreadPoolExecutor(max_workers=max_concurrency) as executor:
-        res = list(executor.map(_run, *zip(*args)))
-        simulation_results.simulations.extend(res)
+    if len(args) == 0:
+        return simulation_results
+
+    if uses_local_backend or max_concurrency <= 1:
+        res = [_run(*arg) for arg in args]
+    else:
+        with ThreadPoolExecutor(max_workers=max_concurrency) as executor:
+            res = list(executor.map(_run, *zip(*args)))
+    simulation_results.simulations.extend(res)
     ConsoleDisplay.console.print(
         "\n✨ [bold green]Successfully completed all simulations![/bold green]\n"
         "To review the simulations, run: [bold blue]tau2 view[/bold blue]"

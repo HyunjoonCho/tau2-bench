@@ -1,5 +1,6 @@
 from typing import Any, Optional
 
+import guidance  # noqa: F401
 from loguru import logger
 
 from tau2.data_model.message import AssistantMessage, Message, UserMessage
@@ -30,7 +31,6 @@ class GuidanceBackend(LLMBackend):
         tool_choice: Optional[str] = None,
         **kwargs: Any,
     ) -> UserMessage | AssistantMessage:
-        self._ensure_guidance_installed()
         logger.warning(
             "Guidance backend is running with baseline transformers behavior. "
             "Constraint-specific guidance programs can be added in a follow-up pass."
@@ -42,14 +42,3 @@ class GuidanceBackend(LLMBackend):
             tool_choice=tool_choice,
             **kwargs,
         )
-
-    @staticmethod
-    def _ensure_guidance_installed() -> None:
-        try:
-            import guidance  # noqa: F401
-        except Exception as e:
-            raise ImportError(
-                "Guidance backend requires the `guidance` package. "
-                "Install it before using --*-llm-backend guidance."
-            ) from e
-

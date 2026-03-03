@@ -9,11 +9,6 @@ def test_guidance_backend_delegates_to_transformers(monkeypatch):
         UserMessage(role="user", content="hello"),
     ]
     monkeypatch.setattr(
-        backend,
-        "_ensure_guidance_installed",
-        lambda: None,
-    )
-    monkeypatch.setattr(
         backend._transformers_backend,
         "generate",
         lambda **kwargs: AssistantMessage(role="assistant", content="ok"),

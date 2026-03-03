@@ -120,7 +120,7 @@ To provide your API keys, copy `.env.example` as `.env` and edit it to include y
 By default, both agent and user simulator use the `litellm` backend. You can override each side independently with:
 - `--agent-llm-backend litellm|transformers|guidance`
 - `--user-llm-backend litellm|transformers|guidance`
-When using local backends, install the required libraries first (`transformers` for `transformers`, and both `transformers` + `guidance` for `guidance`).
+Local backend dependencies (`torch`, `transformers`, `guidance`, `accelerate`) are included in project requirements.
 
 ### Run agent evaluation
 

@@ -9,7 +9,12 @@ from tau2.config import (
     DEFAULT_LLM_ARGS_USER,
     DEFAULT_LLM_USER,
 )
-from tau2.data_model.simulation import RunConfig
+from tau2.data_model.simulation import (
+    RewardInfo,
+    RunConfig,
+    SimulationRun,
+    TerminationReason,
+)
 from tau2.data_model.tasks import EnvAssertion, RewardType, Task, make_task
 from tau2.run import (
     EvaluationType,
@@ -84,6 +89,59 @@ def test_get_info_includes_llm_backends():
     )
     assert info.agent_info.llm_backend == "transformers"
     assert info.user_info.llm_backend == "litellm"
+
+
+def test_run_tasks_local_backend_avoids_threadpool(base_task: Task, monkeypatch):
+    captured = {"executor_called": False, "run_task_calls": 0}
+
+    class DummyExecutor:
+        def __init__(self, *args, **kwargs):
+            captured["executor_called"] = True
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        @staticmethod
+        def map(fn, *iterables):
+            return []
+
+    def fake_run_task(**kwargs):
+        captured["run_task_calls"] += 1
+        task = kwargs["task"]
+        return SimulationRun(
+            id=f"sim-{captured['run_task_calls']}",
+            task_id=task.id,
+            start_time="2026-01-01T00:00:00",
+            end_time="2026-01-01T00:00:01",
+            duration=1.0,
+            termination_reason=TerminationReason.AGENT_STOP,
+            reward_info=RewardInfo(reward=1.0),
+            messages=[],
+        )
+
+    monkeypatch.setattr("tau2.run.ThreadPoolExecutor", DummyExecutor)
+    monkeypatch.setattr("tau2.run.run_task", fake_run_task)
+    results = run_tasks(
+        domain="mock",
+        tasks=[base_task],
+        agent="llm_agent",
+        user="user_simulator",
+        llm_agent="dummy-model",
+        llm_backend_agent="transformers",
+        llm_args_agent={},
+        llm_user="dummy-model",
+        llm_backend_user="litellm",
+        llm_args_user={},
+        max_concurrency=3,
+        console_display=False,
+        save_to=None,
+    )
+    assert captured["executor_called"] is False
+    assert captured["run_task_calls"] == 1
+    assert len(results.simulations) == 1
 
 
 def test_load_tasks():
