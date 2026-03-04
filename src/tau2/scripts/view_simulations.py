@@ -155,6 +155,57 @@ def save_simulation_note(
         writer.writerow(row)
 
 
+def display_viewer_cost_and_duration_summary(results: Results) -> None:
+    """Display viewer-local duration and cost summary."""
+    df = results.to_df()
+    total_runs = len(df)
+
+    valid_duration = df["duration"].dropna()
+    avg_duration = float(valid_duration.mean()) if len(valid_duration) > 0 else None
+
+    valid_agent_cost_mask = df["agent_cost"].notna()
+    valid_agent_cost_runs = int(valid_agent_cost_mask.sum())
+    ignored_agent_cost_runs = total_runs - valid_agent_cost_runs
+    avg_agent_cost = (
+        float(df.loc[valid_agent_cost_mask, "agent_cost"].mean())
+        if valid_agent_cost_runs > 0
+        else None
+    )
+
+    valid_user_cost_mask = df["user_cost"].notna()
+    valid_user_cost_runs = int(valid_user_cost_mask.sum())
+    ignored_user_cost_runs = total_runs - valid_user_cost_runs
+    avg_user_cost = (
+        float(df.loc[valid_user_cost_mask, "user_cost"].mean())
+        if valid_user_cost_runs > 0
+        else None
+    )
+
+    ConsoleDisplay.console.print("\n[bold blue]Viewer Cost/Duration Summary:[/]")
+    if avg_duration is None:
+        ConsoleDisplay.console.print("Average Duration: N/A")
+    else:
+        ConsoleDisplay.console.print(f"Average Duration: {avg_duration:.2f}s")
+
+    if avg_agent_cost is None:
+        agent_cost_str = "N/A"
+    else:
+        agent_cost_str = f"${avg_agent_cost:.4f}"
+    ConsoleDisplay.console.print(
+        "Average Agent Cost: "
+        f"{agent_cost_str} (ignored invalid runs: {ignored_agent_cost_runs}/{total_runs})"
+    )
+
+    if avg_user_cost is None:
+        user_cost_str = "N/A"
+    else:
+        user_cost_str = f"${avg_user_cost:.4f}"
+    ConsoleDisplay.console.print(
+        "Average User Cost: "
+        f"{user_cost_str} (ignored invalid runs: {ignored_user_cost_runs}/{total_runs})"
+    )
+
+
 def main(
     sim_file: Optional[str] = None,
     only_show_failed: bool = False,
@@ -240,6 +291,7 @@ def main(
             ConsoleDisplay.console.clear()
             metrics = compute_metrics(results)
             ConsoleDisplay.display_agent_metrics(metrics)
+            display_viewer_cost_and_duration_summary(results)
             continue
 
         elif results and choice == "3":
