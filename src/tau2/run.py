@@ -13,9 +13,11 @@ from tau2.agent.llm_agent import LLMAgent, LLMGTAgent, LLMSoloAgent
 from tau2.data_model.simulation import (
     AgentInfo,
     Info,
+    RewardInfo,
     Results,
     RunConfig,
     SimulationRun,
+    TerminationReason,
     UserInfo,
 )
 from tau2.data_model.tasks import Task
@@ -380,6 +382,7 @@ def run_tasks(
             style="bold green",
         )
         ConsoleDisplay.console.print(console_text)
+        run_start_time = get_now()
         try:
             simulation = run_task(
                 domain=domain,
@@ -399,12 +402,35 @@ def run_tasks(
                 enforce_communication_protocol=enforce_communication_protocol,
             )
             simulation.trial = trial
-            if console_display:
-                ConsoleDisplay.display_simulation(simulation, show_details=False)
-            _save(simulation)
         except Exception as e:
-            logger.error(f"Error running task {task.id}, trial {trial}: {e}")
-            raise e
+            logger.exception(f"Error running task {task.id}, trial {trial}: {e}")
+            run_end_time = get_now()
+            simulation = SimulationRun(
+                id=f"failed_{task.id}_{trial}_{seed}_{run_end_time}",
+                task_id=task.id,
+                start_time=run_start_time,
+                end_time=run_end_time,
+                duration=0.0,
+                termination_reason=TerminationReason.AGENT_ERROR,
+                reward_info=RewardInfo(
+                    reward=0.0,
+                    reward_basis=None,
+                    info={
+                        "note": "Run failed due to an exception.",
+                        "error_type": type(e).__name__,
+                        "error": str(e),
+                        "task_id": task.id,
+                        "trial": trial,
+                        "seed": seed,
+                    },
+                ),
+                messages=[],
+                seed=seed,
+                trial=trial,
+            )
+        if console_display:
+            ConsoleDisplay.display_simulation(simulation, show_details=False)
+        _save(simulation)
         return simulation
 
     args = []
